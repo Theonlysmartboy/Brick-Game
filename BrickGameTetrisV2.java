@@ -55,6 +55,8 @@ public class BrickGameTetrisV2 extends JFrame {
     // Audio variables
     private Clip moveSound;
     private Clip lineClearSound;
+    private Clip gameStartSound;
+    private Clip gameOverSound;
     private boolean soundsEnabled = true;
     
     public BrickGameTetrisV2() {
@@ -110,21 +112,43 @@ public class BrickGameTetrisV2 extends JFrame {
     
     private void initSounds() {
         try {
-            // Short beep for block movement
+            // Block movement sound
             AudioInputStream moveAudio = AudioSystem.getAudioInputStream(
                 getClass().getResourceAsStream("/assets/mr_9999_14.wav"));
             moveSound = AudioSystem.getClip();
             moveSound.open(moveAudio);
             
-            // Long beep for line clear
+            // Line clear sound
             AudioInputStream clearAudio = AudioSystem.getAudioInputStream(
                 getClass().getResourceAsStream("/assets/mr_9999_15.wav"));
             lineClearSound = AudioSystem.getClip();
             lineClearSound.open(clearAudio);
+
+            // Game start sound
+            AudioInputStream startAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/assets/mr_9999_00.wav"));
+            gameStartSound = AudioSystem.getClip();
+            gameStartSound.open(startAudio);
+        
+            // Game over sound (descending tone)
+            AudioInputStream overAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/assets/mr_9999_04.wav"));
+            gameOverSound = AudioSystem.getClip();
+            gameOverSound.open(overAudio);
         } catch (Exception e) {
             System.out.println("Audio files not found - sounds disabled");
             soundsEnabled = false;
         }
+    }
+
+    private void playGameStartSound() {
+        if (!soundsEnabled) return;
+    
+        if (gameStartSound.isRunning()) {
+            gameStartSound.stop();
+        }
+        gameStartSound.setFramePosition(0);
+        gameStartSound.start();
     }
 
     private void playMoveSound() {
@@ -147,8 +171,19 @@ public class BrickGameTetrisV2 extends JFrame {
         lineClearSound.start();
     }
 
+    private void playGameOverSound() {
+        if (!soundsEnabled) return;
+        
+        if (gameOverSound.isRunning()) {
+            gameOverSound.stop();
+        }
+        gameOverSound.setFramePosition(0);
+        gameOverSound.start();
+    }
+
     private void handleMenuInput(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+            playGameStartSound(); // Play sound when starting the game
             gameState = GameState.PLAYING;
             setupGame();
             newPiece();
@@ -330,6 +365,7 @@ public class BrickGameTetrisV2 extends JFrame {
     }
     
     private void gameOver() {
+        playGameOverSound(); // Play sound when the game ends
         gameTimer.stop();
         gameState = GameState.GAME_OVER;
     }
