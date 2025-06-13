@@ -1,3 +1,6 @@
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -48,6 +51,11 @@ public class BrickGameTetrisV2 extends JFrame {
     
     private Timer gameTimer;
     private Random random = new Random();
+
+    // Audio variables
+    private Clip moveSound;
+    private Clip lineClearSound;
+    private boolean soundsEnabled = true;
     
     public BrickGameTetrisV2() {
         setTitle("BRICK GAME 9999-in-1 - TETRIS");
@@ -57,6 +65,9 @@ public class BrickGameTetrisV2 extends JFrame {
         
         setupGame();
         setupControls();
+
+        // Initialize audio
+        initSounds();
     }
     
     private void setupGame() {
@@ -97,6 +108,25 @@ public class BrickGameTetrisV2 extends JFrame {
         });
     }
     
+    private void initSounds() {
+        try {
+            // Short beep for block movement
+            AudioInputStream moveAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/move.wav"));
+            moveSound = AudioSystem.getClip();
+            moveSound.open(moveAudio);
+            
+            // Long beep for line clear
+            AudioInputStream clearAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/clear.wav"));
+            lineClearSound = AudioSystem.getClip();
+            lineClearSound.open(clearAudio);
+        } catch (Exception e) {
+            System.out.println("Audio files not found - sounds disabled");
+            soundsEnabled = false;
+        }
+    }
+
     private void handleMenuInput(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
             gameState = GameState.PLAYING;
