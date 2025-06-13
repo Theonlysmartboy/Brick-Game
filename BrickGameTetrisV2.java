@@ -112,19 +112,39 @@ public class BrickGameTetrisV2 extends JFrame {
         try {
             // Short beep for block movement
             AudioInputStream moveAudio = AudioSystem.getAudioInputStream(
-                getClass().getResourceAsStream("/move.wav"));
+                getClass().getResourceAsStream("/assets/mr_9999_14.wav"));
             moveSound = AudioSystem.getClip();
             moveSound.open(moveAudio);
             
             // Long beep for line clear
             AudioInputStream clearAudio = AudioSystem.getAudioInputStream(
-                getClass().getResourceAsStream("/clear.wav"));
+                getClass().getResourceAsStream("/assets/mr_9999_15.wav"));
             lineClearSound = AudioSystem.getClip();
             lineClearSound.open(clearAudio);
         } catch (Exception e) {
             System.out.println("Audio files not found - sounds disabled");
             soundsEnabled = false;
         }
+    }
+
+    private void playMoveSound() {
+        if (!soundsEnabled) return;
+        
+        if (moveSound.isRunning()) {
+            moveSound.stop();
+        }
+        moveSound.setFramePosition(0);
+        moveSound.start();
+    }
+    
+    private void playLineClearSound() {
+        if (!soundsEnabled) return;
+        
+        if (lineClearSound.isRunning()) {
+            lineClearSound.stop();
+        }
+        lineClearSound.setFramePosition(0);
+        lineClearSound.start();
     }
 
     private void handleMenuInput(KeyEvent e) {
@@ -184,7 +204,8 @@ public class BrickGameTetrisV2 extends JFrame {
         currentColor = 1 + random.nextInt(COLORS.length - 1);
         currentX = WIDTH / 2 - currentPiece[0].length / 2;
         currentY = 0;
-        
+        playMoveSound(); // Play sound when new piece appears
+
         if (collision()) {
             gameOver();
         }
@@ -216,6 +237,7 @@ public class BrickGameTetrisV2 extends JFrame {
             currentY--;
             return false;
         }
+        playMoveSound(); // Play sound with each movement
         return true;
     }
     
@@ -292,6 +314,8 @@ public class BrickGameTetrisV2 extends JFrame {
             level = 1 + (linesCleared / 10);
             gameSpeed = Math.max(100, 500 - (level * 40)); // Speed increases with level
             gameTimer.setDelay(gameSpeed);
+
+            playLineClearSound(); // Play long beep for line clear
         }
     }
     
@@ -462,7 +486,7 @@ public class BrickGameTetrisV2 extends JFrame {
     
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            BrickGameTetris game = new BrickGameTetris();
+            BrickGameTetrisV2 game = new BrickGameTetrisV2();
             game.setVisible(true);
         });
     }
