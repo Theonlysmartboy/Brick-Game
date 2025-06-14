@@ -5,6 +5,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class BrickGameTetrisV2 extends JFrame {
     // Game constants
@@ -52,12 +54,16 @@ public class BrickGameTetrisV2 extends JFrame {
     private Timer gameTimer;
     private Random random = new Random();
 
-    // Audio variables
+    // Game sound variables
     private Clip moveSound;
     private Clip lineClearSound;
     private Clip gameStartSound;
     private Clip gameOverSound;
     private boolean soundsEnabled = true;
+    private volatile boolean isStartSoundPlaying = false;
+    private volatile boolean isGameActive = false;
+    private volatile boolean allowMoveSounds = false; 
+    private ScheduledExecutorService soundExecutor = Executors.newSingleThreadScheduledExecutor();
     
     public BrickGameTetrisV2() {
         setTitle("BRICK GAME 9999-in-1 - TETRIS");
@@ -84,8 +90,6 @@ public class BrickGameTetrisV2 extends JFrame {
         linesCleared = 0;
         level = 1;
         gameSpeed = 500;
-        
-        gameTimer = new Timer(gameSpeed, e -> gameUpdate());
     }
     
     private void setupControls() {
@@ -141,54 +145,114 @@ public class BrickGameTetrisV2 extends JFrame {
         }
     }
 
-    private void playGameStartSound() {
-        if (!soundsEnabled) return;
-    
-        if (gameStartSound.isRunning()) {
-            gameStartSound.stop();
-        }
-        gameStartSound.setFramePosition(0);
-        gameStartSound.start();
+    private void startGame() {
+        gameState = GameState.PLAYING;
+        setupGame();
+        // Create timer only when starting the game
+        gameTimer = new Timer(gameSpeed, e -> gameUpdate());
+        newPiece();
+        gameTimer.start();
+        repaint();
     }
 
-    private void playMoveSound() {
-        if (!soundsEnabled) return;
-        
-        if (moveSound.isRunning()) {
-            moveSound.stop();
+    private void playGameStartSound() {
+        if (!soundsEnabled) {
+            startGame();
+            return;
         }
-        moveSound.setFramePosition(0);
-        moveSound.start();
+
+        soundExecutor.execute(() -> {
+            try {
+                isStartSoundPlaying = true;
+                isGameActive = false; // Game not active until start sound finishes
+                allowMoveSounds = false; // Block move sounds during startup
+                
+                if (gameStartSound.isRunning()) {
+                    gameStartSound.stop();
+                }
+                gameStartSound.setFramePosition(0);
+                gameStartSound.start();
+                
+                // Wait for sound to finish
+                while (gameStartSound.isRunning()) {
+                    Thread.sleep(50);
+                }
+                
+                isStartSoundPlaying = false;
+                isGameActive = true; // Now game is active
+                allowMoveSounds = true; // Now allow move sounds
+                
+                // Start the game after sound completes
+                SwingUtilities.invokeLater(this::startGame);
+            } catch (Exception e) {
+                System.out.println("Error playing start sound");
+                // Fallback to starting game if sound fails
+                SwingUtilities.invokeLater(() -> {
+                    isStartSoundPlaying = false;
+                    isGameActive = true;
+                    allowMoveSounds = true;
+                    startGame();
+                });
+            }
+        });
+    }
+    
+    private void playMoveSound() {
+        if (!soundsEnabled || isStartSoundPlaying || !isGameActive || !allowMoveSounds) return;
+        
+        soundExecutor.execute(() -> {
+            try {
+                if (moveSound.isRunning()) {
+                    moveSound.stop();
+                }
+                moveSound.setFramePosition(0);
+                moveSound.start();
+            } catch (Exception e) {
+                System.out.println("Error playing move sound");
+            }
+        });
     }
     
     private void playLineClearSound() {
-        if (!soundsEnabled) return;
+        if (!soundsEnabled || isStartSoundPlaying) return;
         
-        if (lineClearSound.isRunning()) {
-            lineClearSound.stop();
-        }
-        lineClearSound.setFramePosition(0);
-        lineClearSound.start();
+        soundExecutor.execute(() -> {
+            try {
+                if (lineClearSound.isRunning()) {
+                    lineClearSound.stop();
+                }
+                lineClearSound.setFramePosition(0);
+                lineClearSound.start();
+            } catch (Exception e) {
+                System.out.println("Error playing clear sound");
+            }
+        });
     }
 
     private void playGameOverSound() {
         if (!soundsEnabled) return;
         
-        if (gameOverSound.isRunning()) {
-            gameOverSound.stop();
-        }
-        gameOverSound.setFramePosition(0);
-        gameOverSound.start();
+        soundExecutor.execute(() -> {
+            try {
+                // Wait for any started sound to finish
+                while (isStartSoundPlaying) {
+                    Thread.sleep(10);
+                }
+                
+                if (gameOverSound.isRunning()) {
+                    gameOverSound.stop();
+                }
+                gameOverSound.setFramePosition(0);
+                gameOverSound.start();
+            } catch (Exception e) {
+                System.out.println("Error playing game over sound");
+            }
+        });
     }
 
     private void handleMenuInput(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-            playGameStartSound(); // Play sound when starting the game
-            gameState = GameState.PLAYING;
-            setupGame();
-            newPiece();
-            gameTimer.start();
-            repaint();
+            playGameStartSound(); // No callback needed now
         }
     }
     
@@ -239,7 +303,12 @@ public class BrickGameTetrisV2 extends JFrame {
         currentColor = 1 + random.nextInt(COLORS.length - 1);
         currentX = WIDTH / 2 - currentPiece[0].length / 2;
         currentY = 0;
-        playMoveSound(); // Play sound when new piece appears
+        
+        // Only play move sound if game is fully active
+        if (isGameActive && allowMoveSounds) {
+            // Only play sound if allowed
+            playMoveSound();
+        }
 
         if (collision()) {
             gameOver();
@@ -272,7 +341,11 @@ public class BrickGameTetrisV2 extends JFrame {
             currentY--;
             return false;
         }
-        playMoveSound(); // Play sound with each movement
+        if (allowMoveSounds) { // Only play sound if allowed
+            SwingUtilities.invokeLater(() -> {
+                playMoveSound(); // Play sound with each movement
+            });
+        }
         return true;
     }
     
@@ -365,7 +438,9 @@ public class BrickGameTetrisV2 extends JFrame {
     }
     
     private void gameOver() {
-        playGameOverSound(); // Play sound when the game ends
+        isGameActive = false;
+        allowMoveSounds = false; // Disable move sounds when game ends
+        playGameOverSound(); // Play end sound
         gameTimer.stop();
         gameState = GameState.GAME_OVER;
     }
@@ -518,6 +593,12 @@ public class BrickGameTetrisV2 extends JFrame {
         FontMetrics fm = g.getFontMetrics();
         int textWidth = fm.stringWidth(text);
         g.drawString(text, x - textWidth / 2, y);
+    }
+
+    @Override
+    public void dispose() {
+        soundExecutor.shutdownNow();
+        super.dispose();
     }
     
     public static void main(String[] args) {
