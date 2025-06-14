@@ -58,6 +58,7 @@ public class BrickGameTetrisV2 extends JFrame {
     private Clip moveSound;
     private Clip lineClearSound;
     private Clip gameStartSound;
+    private Clip levelUpSound;
     private Clip gameOverSound;
     private boolean soundsEnabled = true;
     private volatile boolean isStartSoundPlaying = false;
@@ -116,23 +117,29 @@ public class BrickGameTetrisV2 extends JFrame {
     
     private void initSounds() {
         try {
-            // Block movement sound
-            AudioInputStream moveAudio = AudioSystem.getAudioInputStream(
-                getClass().getResourceAsStream("/assets/mr_9999_14.wav"));
-            moveSound = AudioSystem.getClip();
-            moveSound.open(moveAudio);
-            
-            // Line clear sound
-            AudioInputStream clearAudio = AudioSystem.getAudioInputStream(
-                getClass().getResourceAsStream("/assets/mr_9999_15.wav"));
-            lineClearSound = AudioSystem.getClip();
-            lineClearSound.open(clearAudio);
-
             // Game start sound
             AudioInputStream startAudio = AudioSystem.getAudioInputStream(
                 getClass().getResourceAsStream("/assets/mr_9999_00.wav"));
             gameStartSound = AudioSystem.getClip();
             gameStartSound.open(startAudio);
+
+            // Block movement sound
+            AudioInputStream moveAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/assets/mr_9999_14.wav"));
+            moveSound = AudioSystem.getClip();
+            moveSound.open(moveAudio);
+
+            // Level up sound
+            AudioInputStream levelUpAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/assets/mr_9999_02.wav")); 
+            levelUpSound = AudioSystem.getClip();
+            levelUpSound.open(levelUpAudio);
+
+        // Line clear sound
+            AudioInputStream clearAudio = AudioSystem.getAudioInputStream(
+                getClass().getResourceAsStream("/assets/mr_9999_15.wav"));
+            lineClearSound = AudioSystem.getClip();
+            lineClearSound.open(clearAudio);
         
             // Game over sound (descending tone)
             AudioInputStream overAudio = AudioSystem.getAudioInputStream(
@@ -213,6 +220,21 @@ public class BrickGameTetrisV2 extends JFrame {
         });
     }
     
+private void playLevelUpSound() {
+    if (!soundsEnabled || isStartSoundPlaying) return;
+        soundExecutor.execute(() -> {
+            try {
+                if (levelUpSound.isRunning()) {
+                    levelUpSound.stop();
+                }
+                levelUpSound.setFramePosition(0);
+                levelUpSound.start();
+            } catch (Exception e) {
+                System.out.println("Error playing level up sound");
+            }
+        });
+    }
+
     private void playLineClearSound() {
         if (!soundsEnabled || isStartSoundPlaying) return;
         
@@ -391,6 +413,7 @@ public class BrickGameTetrisV2 extends JFrame {
     
     private void clearLines() {
         int linesRemoved = 0;
+        int oldLevel = level; // Store current level before potential change
         
         for (int y = HEIGHT - 1; y >= 0; y--) {
             boolean fullLine = true;
@@ -419,9 +442,14 @@ public class BrickGameTetrisV2 extends JFrame {
             score += calculateScore(linesRemoved);
             
             // Increase level every 10 lines
-            level = 1 + (linesCleared / 10);
-            gameSpeed = Math.max(100, 500 - (level * 40)); // Speed increases with level
+            // Check if level changed
+        int newLevel = 1 + (linesCleared / 10);
+        if (newLevel > oldLevel) {
+            level = newLevel;
+            gameSpeed = Math.max(100, 500 - (level * 40));
             gameTimer.setDelay(gameSpeed);
+            playLevelUpSound(); // Play level up sound
+        }
 
             playLineClearSound(); // Play long beep for line clear
         }
@@ -598,6 +626,7 @@ public class BrickGameTetrisV2 extends JFrame {
     @Override
     public void dispose() {
         soundExecutor.shutdownNow();
+        if (levelUpSound != null) levelUpSound.close();
         super.dispose();
     }
     
