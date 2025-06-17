@@ -143,6 +143,11 @@ public class BrickGameTetris extends JFrame {
             levelUpSound = loadSound("/assets/mr_9999_02.wav");
             lineClearSound = loadSound("/assets/mr_9999_15.wav");
             gameOverSound = loadSound("/assets/mr_9999_04.wav");
+
+            // Verify all sounds loaded
+            soundsEnabled = gameStartSound != null && moveSound != null 
+                && levelUpSound != null && lineClearSound != null 
+                && gameOverSound != null;
         } catch (Exception e) {
             System.out.println("Audio files not found - sounds disabled");
             soundsEnabled = false;
@@ -285,6 +290,7 @@ public class BrickGameTetris extends JFrame {
         isAnimating = true;
         animationStep = 0;
         rotationAngle = 0;
+        
 
         // Play sound immediately
         soundExecutor.execute(() -> {
@@ -300,26 +306,24 @@ public class BrickGameTetris extends JFrame {
 
         // Start animation timer
         Timer animationTimer = new Timer(16, new ActionListener() {
-            private long lastTime = System.currentTimeMillis();
+            private long startTime = System.currentTimeMillis();
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                long currentTime = System.currentTimeMillis();
-                long delta = currentTime - lastTime;
-                lastTime = currentTime;
-                animationStep++;
-                rotationAngle += delta * 0.1; // Smooth rotation based on actual time passed
+                long elapsed = System.currentTimeMillis() - startTime;
+                animationStep = (int)(elapsed / 16);
+                rotationAngle = (int)(elapsed / 20); // Slower rotation
 
                 // End animation when sound finishes or max steps reached
-                if (System.currentTimeMillis() >= lastSoundEndTime ||
-                        animationStep * 30 >= ANIMATION_DURATION) {
-                    ((Timer) e.getSource()).stop();
+                if (elapsed >= START_SOUND_DURATION) {
+                    ((Timer)e.getSource()).stop();
                     isAnimating = false;
-                    startGame(); // Start actual game after animation
+                    startGame(); //start actual game
                 }
                 repaint();
             }
         });
+        animationTimer.setCoalesce(true);
         animationTimer.start();
     }
 
@@ -362,10 +366,13 @@ public class BrickGameTetris extends JFrame {
                 moveRight();
                 break;
             case KeyEvent.VK_DOWN:
-                if (!moveDown()) {
-                    mergePiece();
-                    clearLines();
-                    newPiece();
+                boolean moved = moveDown();
+                if (!moved || !moveDown()) { // Try to move down twice
+                    if (!moved) {  // If first move failed, just merge
+                        mergePiece();
+                        clearLines();
+                        newPiece();
+                    }
                 }
                 break;
             case KeyEvent.VK_UP:
@@ -583,67 +590,92 @@ private void togglePause() {
     }
 
     private void drawAnimation(Graphics g) {
-        // Get the buffer strategy
-        BufferStrategy strategy = getBufferStrategy();
-        if (strategy == null)
-            return;
-
-        do {
-            do {
-                Graphics graphics = strategy.getDrawGraphics();
-
-                try {
-                    // Clear the background
-                    graphics.setColor(BG_COLOR);
-                    graphics.fillRect(0, 0, getWidth(), getHeight());
-
-                    // Calculate animation progress (0.0 to 1.0)
-                    float progress = Math.min(1.0f, (float) animationStep * 30 / ANIMATION_DURATION);
-
-                    // Draw filled grid
-                    for (int y = 0; y < HEIGHT; y++) {
-                        for (int x = 0; x < WIDTH; x++) {
-                            float distX = Math.abs(x - WIDTH / 2f);
-                            float distY = Math.abs(y - HEIGHT / 2f);
-                            float distance = Math.max(distX, distY); // Square pattern
-
-                            if (distance > progress * Math.max(WIDTH, HEIGHT) / 2) {
-                                int colorIdx = 1 + (x + y + animationStep / 3) % (COLORS.length - 1);
-                                drawAnimatedBlock(graphics, x, y, colorIdx, rotationAngle);
-                            }
-                        }
-                    }
-
-                    // Draw rotating center piece
-                    Graphics2D g2d = (Graphics2D) graphics.create();
-                    int centerX = 10 + WIDTH * BLOCK_SIZE / 2;
-                    int centerY = 10 + HEIGHT * BLOCK_SIZE / 2;
-                    g2d.translate(centerX, centerY);
-                    g2d.rotate(Math.toRadians(rotationAngle));
-
-                    // Draw sample tetromino
-                    int[][] demoPiece = TETROMINOS[3]; // L-piece
-                    for (int y = 0; y < demoPiece.length; y++) {
-                        for (int x = 0; x < demoPiece[y].length; x++) {
-                            if (demoPiece[y][x] != 0) {
-                                g2d.setColor(COLORS[7]); // Orange
-                                g2d.fillRect(x * BLOCK_SIZE - demoPiece[0].length * BLOCK_SIZE / 2,
-                                        y * BLOCK_SIZE - demoPiece.length * BLOCK_SIZE / 2,
-                                        BLOCK_SIZE, BLOCK_SIZE);
-                            }
-                        }
-                    }
-                    g2d.dispose();
-
-                } finally {
-                    graphics.dispose();
+        Graphics2D g2d = (Graphics2D)g;
+        
+        // Clear background
+        g2d.setColor(BG_COLOR);
+        g2d.fillRect(0, 0, getWidth(), getHeight());
+        
+        // Calculate animation progress (0.0 to 1.0)
+        float progress = Math.min(1.0f, (float)animationStep * 30 / ANIMATION_DURATION);
+        
+        // Draw expanding square pattern
+        int maxDist = Math.max(WIDTH, HEIGHT)/2;
+        int currentDist = (int)(progress * maxDist);
+        
+        // Draw grid of blocks expanding outward
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                int distX = Math.abs(x - WIDTH/2);
+                int distY = Math.abs(y - HEIGHT/2);
+                int distance = Math.max(distX, distY);
+                
+                if (distance <= currentDist) {
+                    // Calculate color based on position and animation step
+                    int colorIdx = 1 + ((x + y + animationStep/3) % (COLORS.length-1));
+                    drawAnimatedBlock(g2d, x, y, colorIdx, 
+                        rotationAngle * (distance+1) / 2); // Vary rotation by distance
                 }
-
-            } while (strategy.contentsRestored());
-
-            strategy.show();
-
-        } while (strategy.contentsLost());
+            }
+        }
+        
+        // Draw center piece that grows and rotates
+        int centerSize = (int)(progress * 4); // Grows from 0 to 4 blocks
+        if (centerSize > 0) {
+            int[][] demoPiece = new int[centerSize][centerSize];
+            for (int y = 0; y < centerSize; y++) {
+                for (int x = 0; x < centerSize; x++) {
+                    demoPiece[y][x] = 1;
+                }
+            }
+            
+            Graphics2D centerG = (Graphics2D)g2d.create();
+            int centerX = 10 + WIDTH * BLOCK_SIZE / 2 - (centerSize * BLOCK_SIZE)/2;
+            int centerY = 10 + HEIGHT * BLOCK_SIZE / 2 - (centerSize * BLOCK_SIZE)/2;
+            
+            centerG.translate(centerX, centerY);
+            centerG.rotate(Math.toRadians(rotationAngle), 
+                        (centerSize * BLOCK_SIZE)/2, 
+                        (centerSize * BLOCK_SIZE)/2);
+            
+            for (int y = 0; y < demoPiece.length; y++) {
+                for (int x = 0; x < demoPiece[y].length; x++) {
+                    if (demoPiece[y][x] != 0) {
+                        centerG.setColor(COLORS[7]); // Orange
+                        centerG.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    }
+                }
+            }
+            centerG.dispose();
+        }
+        
+        // Draw "BRICK GAME" text that appears
+        if (progress > 0.3) {
+            float textAlpha = Math.min(1.0f, (progress - 0.3f) / 0.2f);
+            g2d.setColor(new Color(255, 255, 255, (int)(textAlpha * 255)));
+            g2d.setFont(new Font("Arial", Font.BOLD, 24));
+            
+            String text = "BRICK GAME";
+            FontMetrics fm = g2d.getFontMetrics();
+            int x = (getWidth() - fm.stringWidth(text)) / 2;
+            int y = HEIGHT * BLOCK_SIZE / 3;
+            
+            g2d.drawString(text, x, y);
+        }
+        
+        // Draw "TETRIS" text that appears later
+        if (progress > 0.6) {
+            float textAlpha = Math.min(1.0f, (progress - 0.6f) / 0.2f);
+            g2d.setColor(new Color(255, 255, 255, (int)(textAlpha * 255)));
+            g2d.setFont(new Font("Arial", Font.BOLD, 36));
+            
+            String text = "TETRIS";
+            FontMetrics fm = g2d.getFontMetrics();
+            int x = (getWidth() - fm.stringWidth(text)) / 2;
+            int y = HEIGHT * BLOCK_SIZE * 2 / 3;
+            
+            g2d.drawString(text, x, y);
+        }
     }
 
     private void drawAnimatedBlock(Graphics g, int x, int y, int colorIdx, int angle) {
@@ -755,8 +787,6 @@ private void togglePause() {
             levelUpSound.close();
         super.dispose();
     }
-
-    // [Keep all other game logic methods the same...]
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
