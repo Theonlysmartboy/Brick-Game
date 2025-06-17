@@ -84,6 +84,10 @@ public class BrickGameTetris extends JFrame {
     private int rotationAngle = 0;
     private final int ANIMATION_DURATION = 12000;
 
+    //Variable to track the next piece
+    private int[][] nextPiece;
+    private int nextPieceColor;
+
     public BrickGameTetris() {
         setTitle("BRICK GAME 9999-in-1 - TETRIS");
         setSize(WIDTH * BLOCK_SIZE + SIDEBAR_WIDTH + 16, HEIGHT * BLOCK_SIZE + 39);
@@ -112,6 +116,12 @@ public class BrickGameTetris extends JFrame {
         linesCleared = 0;
         level = 1;
         gameSpeed = 500;
+        generateNextPiece(); // Initialize the first next piece
+    }
+
+    private void generateNextPiece() {
+        nextPiece = TETROMINOS[random.nextInt(TETROMINOS.length)];
+        nextPieceColor = 1 + random.nextInt(COLORS.length - 1);
     }
 
     private void setupControls() {
@@ -409,10 +419,13 @@ private void togglePause() {
     }
 
     private void newPiece() {
-        currentPiece = TETROMINOS[random.nextInt(TETROMINOS.length)];
-        currentColor = 1 + random.nextInt(COLORS.length - 1);
+        currentPiece = nextPiece;
+        currentColor = nextPieceColor;
         currentX = WIDTH / 2 - currentPiece[0].length / 2;
         currentY = 0;
+
+         // Generate new preview piece
+        generateNextPiece();
 
         // Only play move sound if game is fully active
         if (isGameActive && allowMoveSounds) {
@@ -566,9 +579,15 @@ private void togglePause() {
         gameState = GameState.GAME_OVER;
     }
 
-
     private void drawBlock(Graphics g, int x, int y, int colorIdx) {
         Color color = COLORS[colorIdx];
+
+        // Check if this is a preview block (smaller size)
+        boolean isPreview = (x < 0 || y < 0); // Negative coordinates indicate preview
+
+        int size = isPreview ? BLOCK_SIZE/2 : BLOCK_SIZE;
+        int drawX = isPreview ? -x : 10 + x * BLOCK_SIZE;
+        int drawY = isPreview ? -y : 10 + y * BLOCK_SIZE;
 
         // Block with 3D effect
         g.setColor(color);
@@ -576,17 +595,13 @@ private void togglePause() {
 
         // Highlight
         g.setColor(color.brighter());
-        g.drawLine(10 + x * BLOCK_SIZE, 10 + y * BLOCK_SIZE,
-                10 + (x + 1) * BLOCK_SIZE - 1, 10 + y * BLOCK_SIZE);
-        g.drawLine(10 + x * BLOCK_SIZE, 10 + y * BLOCK_SIZE,
-                10 + x * BLOCK_SIZE, 10 + (y + 1) * BLOCK_SIZE - 1);
+        g.drawLine(drawX, drawY, drawX + size - 1, drawY);
+        g.drawLine(drawX, drawY, drawX, drawY + size - 1);
 
         // Shadow
         g.setColor(color.darker());
-        g.drawLine(10 + (x + 1) * BLOCK_SIZE - 1, 10 + y * BLOCK_SIZE,
-                10 + (x + 1) * BLOCK_SIZE - 1, 10 + (y + 1) * BLOCK_SIZE - 1);
-        g.drawLine(10 + x * BLOCK_SIZE, 10 + (y + 1) * BLOCK_SIZE - 1,
-                10 + (x + 1) * BLOCK_SIZE - 1, 10 + (y + 1) * BLOCK_SIZE - 1);
+        g.drawLine(drawX + size - 1, drawY, drawX + size - 1, drawY + size - 1);
+        g.drawLine(drawX, drawY + size - 1, drawX + size - 1, drawY + size - 1);
     }
 
     private void drawAnimation(Graphics g) {
@@ -722,23 +737,50 @@ private void togglePause() {
         g.drawString("BRICK GAME", sidebarX + 10, 30);
         g.drawString("9999-in-1", sidebarX + 15, 50);
 
+        // Next piece preview
+        g.drawString("NEXT:", sidebarX + 10, 80);
+        if (nextPiece != null) {
+            // Calculate center position for the preview
+            int previewX = sidebarX + (SIDEBAR_WIDTH - nextPiece[0].length * BLOCK_SIZE/2) / 2;
+            int previewY = 110;
+            
+            // Draw the next piece preview
+            for (int y = 0; y < nextPiece.length; y++) {
+                for (int x = 0; x < nextPiece[y].length; x++) {
+                    if (nextPiece[y][x] != 0) {
+                        drawBlock(g, 
+                            (previewX + x * BLOCK_SIZE/2 - 10) / BLOCK_SIZE, 
+                            (previewY + y * BLOCK_SIZE/2 - 10) / BLOCK_SIZE, 
+                            nextPieceColor);
+                    }
+                }
+            }
+        }
+
+        // Score
         g.setFont(new Font("Arial", Font.BOLD, 12));
-        g.drawString("SCORE:", sidebarX + 10, 80);
-        g.drawString(String.valueOf(score), sidebarX + 10, 100);
+        g.drawString("SCORE:", sidebarX + 10, 160);
+        g.drawString(String.valueOf(score), sidebarX + 10, 180);
 
-        g.drawString("LEVEL:", sidebarX + 10, 130);
-        g.drawString(String.valueOf(level), sidebarX + 10, 150);
+        //Level
+        g.drawString("LEVEL:", sidebarX + 10, 210);
+        g.drawString(String.valueOf(level), sidebarX + 10, 230);
 
-        g.drawString("LINES:", sidebarX + 10, 180);
-        g.drawString(String.valueOf(linesCleared), sidebarX + 10, 200);
+        // Add speed indicator
+        g.drawString("SPEED:", sidebarX + 10, 260);
+        g.drawString(String.valueOf(500 - gameSpeed) + "x", sidebarX + 10, 280); // Shows speed multiplier
+
+        //Lines Removed
+        g.drawString("LINES:", sidebarX + 10, 310);
+        g.drawString(String.valueOf(linesCleared), sidebarX + 10, 330);
 
         // Controls help
         g.setFont(new Font("Arial", Font.PLAIN, 10));
-        g.drawString("CONTROLS:", sidebarX + 10, 250);
-        g.drawString("← → : Move", sidebarX + 10, 270);
-        g.drawString("↑ : Rotate", sidebarX + 10, 290);
-        g.drawString("↓ : Drop", sidebarX + 10, 310);
-        g.drawString("P : Pause", sidebarX + 10, 330);
+        g.drawString("CONTROLS:", sidebarX + 10, 370);
+        g.drawString("← → : Move", sidebarX + 10, 390);
+        g.drawString("↑ : Rotate", sidebarX + 10, 410);
+        g.drawString("↓ : Drop", sidebarX + 10, 430);
+        g.drawString("P : Pause", sidebarX + 10, 450);
     }
 
     private void drawMenu(Graphics g) {
