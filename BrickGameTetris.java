@@ -543,11 +543,12 @@ private void togglePause() {
             score += calculateScore(linesRemoved);
 
             // Increase level every 10 lines
-            // Check if level changed
             int newLevel = 1 + (linesCleared / 10);
+            // Check if level changed
             if (newLevel > oldLevel) {
                 level = newLevel;
-                gameSpeed = Math.max(100, 500 - (level * 40));
+                // Decrease game speed by 50ms per level (max speed of 100ms)
+                gameSpeed = Math.max(100, 500 - (level * 50));
                 gameTimer.setDelay(gameSpeed);
                 playLevelUpSound(); // Play level up sound
             }
@@ -728,30 +729,50 @@ private void togglePause() {
 
         // Sidebar background
         g.setColor(new Color(240, 240, 240));
-        g.fillRect(sidebarX, 10, SIDEBAR_WIDTH - 10, HEIGHT * BLOCK_SIZE);
+        g.fillRect(sidebarX + 5, 10, SIDEBAR_WIDTH - 10, HEIGHT * BLOCK_SIZE);
         g.setColor(Color.BLACK);
         g.drawRect(sidebarX, 10, SIDEBAR_WIDTH - 10, HEIGHT * BLOCK_SIZE);
 
         // Game info
-        g.setFont(new Font("Arial", Font.BOLD, 14));
-        g.drawString("BRICK GAME", sidebarX + 10, 30);
-        g.drawString("9999-in-1", sidebarX + 15, 50);
+        g.setFont(new Font("Arial", Font.BOLD, 12));
+        g.setColor(new Color(180, 50, 180)); // Purple color
+        g.drawString("BRICK GAME", sidebarX + 10, 45);
+        g.drawString("9999-in-1", sidebarX + 15, 55);
+
+        Color textColor = (nextPieceColor >= 1 && nextPieceColor < COLORS.length) ? 
+                        COLORS[nextPieceColor] : Color.BLACK;
 
         // Next piece preview
+        g.setColor(textColor);
         g.drawString("NEXT:", sidebarX + 10, 80);
         if (nextPiece != null) {
             // Calculate center position for the preview
-            int previewX = sidebarX + (SIDEBAR_WIDTH - nextPiece[0].length * BLOCK_SIZE/2) / 2;
+            int previewX = sidebarX + (SIDEBAR_WIDTH/2 - nextPiece[0].length * BLOCK_SIZE/3);
             int previewY = 110;
             
             // Draw the next piece preview
             for (int y = 0; y < nextPiece.length; y++) {
                 for (int x = 0; x < nextPiece[y].length; x++) {
                     if (nextPiece[y][x] != 0) {
-                        drawBlock(g, 
-                            (previewX + x * BLOCK_SIZE/2 - 10) / BLOCK_SIZE, 
-                            (previewY + y * BLOCK_SIZE/2 - 10) / BLOCK_SIZE, 
-                            nextPieceColor);
+                        // Draw smaller blocks for preview
+                        int blockX = previewX + x * BLOCK_SIZE/2;
+                        int blockY = previewY + y * BLOCK_SIZE/2;
+                        
+                        // Block with 3D effect
+                        g.setColor(COLORS[nextPieceColor]);
+                        g.fillRect(blockX, blockY, BLOCK_SIZE/2, BLOCK_SIZE/2);
+                        
+                        // Highlight
+                        g.setColor(COLORS[nextPieceColor].brighter());
+                        g.drawLine(blockX, blockY, blockX + BLOCK_SIZE/2 - 1, blockY);
+                        g.drawLine(blockX, blockY, blockX, blockY + BLOCK_SIZE/2 - 1);
+                        
+                        // Shadow
+                        g.setColor(COLORS[nextPieceColor].darker());
+                        g.drawLine(blockX + BLOCK_SIZE/2 - 1, blockY, 
+                                blockX + BLOCK_SIZE/2 - 1, blockY + BLOCK_SIZE/2 - 1);
+                        g.drawLine(blockX, blockY + BLOCK_SIZE/2 - 1, 
+                                blockX + BLOCK_SIZE/2 - 1, blockY + BLOCK_SIZE/2 - 1);
                     }
                 }
             }
@@ -768,7 +789,7 @@ private void togglePause() {
 
         // Add speed indicator
         g.drawString("SPEED:", sidebarX + 10, 260);
-        g.drawString(String.valueOf(500 - gameSpeed) + "x", sidebarX + 10, 280); // Shows speed multiplier
+        g.drawString(String.valueOf((500 - gameSpeed)/50 + 1) + "x", sidebarX + 10, 280); // Shows speed multiplier
 
         //Lines Removed
         g.drawString("LINES:", sidebarX + 10, 310);
